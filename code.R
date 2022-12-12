@@ -8,6 +8,8 @@ august_csv_path = "Export_8_08_2022.csv"
 
 checquing_account_csv_path = "chequing_account.csv"
 
+output_path_normalized_csv = "normalized_data.csv"
+
 # Read the csvs
 june_csv = read.csv(june_csv_path)
 july_csv = read.csv(july_csv_path)
@@ -44,7 +46,7 @@ cpi_values = c(1 , 2 , 3)
 credit_card_data = rbind(june_csv, july_csv, august_csv)
 
 # remove credit card transactions
-checquing_account_data = subset(checquing_account_csv, category!="credit card" | description != "ישראכרט")
+checquing_account_data = subset(checquing_account_csv, category!="credit card")
 
 # prep to merge objects
 colnames(credit_card_data) = c("date", "debit", "transaction_type", "description", "category", "account")
@@ -53,3 +55,19 @@ credit_card_data = cbind(credit_card_data, credit=0)
 checquing_account_data = cbind(checquing_account_data, transaction_type=NA)
 
 merged_object = rbind(checquing_account_data, credit_card_data)
+
+# get time span of checquing account
+checquing_account_min_date = min(checquing_account_data$date)
+checquing_account_max_date = max(checquing_account_data$date)
+
+merged_object = subset(merged_object, date>=checquing_account_min_date & date<= checquing_account_max_date)
+
+write.csv(merged_object, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
+
+# function that returns the sum of expenditures between two dates
+sumExpenditures = function(df, startDate, endDate) {
+  expenses = (subset(df, date>= startDate &  date <= endDate))$debit
+  sum(expenses, na.rm=TRUE)
+}
+
+sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
