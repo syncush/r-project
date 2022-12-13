@@ -42,7 +42,7 @@ august_csv$date = as.Date(august_csv$date, credit_card_date_format)
 checquing_account_csv$date = as.Date(checquing_account_csv$date, checquing_account_date_format)
 
 
-cpi_values = c(1 , 2 , 3)
+cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
 credit_card_data = rbind(june_csv, july_csv, august_csv)
 
 # remove credit card transactions
@@ -70,4 +70,17 @@ sumExpenditures = function(df, startDate, endDate) {
   sum(expenses, na.rm=TRUE)
 }
 
+# function that returns the mean daily expenditure between two dates
+meanDailyExpenditure <- function(df, startDate, endDate) {
+  daysDiff = as.numeric(difftime(endDate, startDate, units))
+  transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
+  sum(transactionBetweenDates$debit, na.rm = TRUE) / daysDiff
+  #mean((aggregate(transactionBetweenDates$debit,
+  #                by=transactionBetweenDates["date"],
+  #                FUN=function(x) {
+  #                    sum(x, na.rm = TRUE)
+  #      }))$x, na.rm = TRUE)
+}
+
 sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
+meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
