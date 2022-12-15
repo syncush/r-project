@@ -42,7 +42,7 @@ august_csv$date = as.Date(august_csv$date, credit_card_date_format)
 checquing_account_csv$date = as.Date(checquing_account_csv$date, checquing_account_date_format)
 
 
-cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
+cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3) / 100
 credit_card_data = rbind(june_csv, july_csv, august_csv)
 
 # remove credit card transactions
@@ -92,19 +92,26 @@ sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"), "fo
 meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
 meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"), "food")
 
+compareExpenditureToCPI <- function(df, category=NA) {
+  summarized_data = data.frame(month=c("June", "July", "August"),
+                               sumExpendituresPerMonth=c(
+                                 sumExpenditures(df, as.Date("2022-06-01"), as.Date("2022-06-30"), category),
+                                 sumExpenditures(df, as.Date("2022-07-01"), as.Date("2022-07-31"), category),
+                                 sumExpenditures(df, as.Date("2022-08-01"), as.Date("2022-08-31"), category)
+                               ),
+                               meanDailyExpenditurePerMonth=c(
+                                 meanDailyExpenditure(df, as.Date("2022-06-01"), as.Date("2022-06-30"), category),
+                                 meanDailyExpenditure(df, as.Date("2022-07-01"), as.Date("2022-07-31"), category),
+                                 meanDailyExpenditure(df, as.Date("2022-08-01"), as.Date("2022-08-31"), category)
+                               ),
+                               stringsAsFactors = FALSE
+  )
+  
+  comparison_table <-(summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / 
+                        summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) / 100
+  
+  data.frame(Months=c("July-June", "August-July"), CPI_INDEX=cpi_values_diff_between_months[2:3], sum_expenditure_index=comparison_table[,1], mean_daily_expenditure_index=comparison_table[,2])
+}
 
-summarized_data = data.frame(month=c("June", "July", "August"),
-                     sumExpendituresPerMonth=c(
-                       sumExpenditures(merged_object, as.Date("2022-06-01"), as.Date("2022-06-30")),
-                       sumExpenditures(merged_object, as.Date("2022-07-01"), as.Date("2022-07-31")),
-                       sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-31"))
-                     ),
-                     meanDailyExpenditurePerMonth=c(
-                       meanDailyExpenditure(merged_object, as.Date("2022-06-01"), as.Date("2022-06-30")),
-                       meanDailyExpenditure(merged_object, as.Date("2022-07-01"), as.Date("2022-07-31")),
-                       meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-31"))
-                     ),
-                     stringsAsFactors = FALSE
-                  )
-
-summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]
+compareExpenditureToCPI(merged_object)
+compareExpenditureToCPI(merged_object, "food")
