@@ -65,22 +65,46 @@ merged_object = subset(merged_object, date>=checquing_account_min_date & date<= 
 write.csv(merged_object, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
 
 # function that returns the sum of expenditures between two dates
-sumExpenditures = function(df, startDate, endDate) {
-  expenses = (subset(df, date>= startDate &  date <= endDate))$debit
+sumExpenditures = function(df, startDate, endDate, categoryFilter=NA) {
+  if (is.na(categoryFilter)) {
+    expenses = (subset(df, date>= startDate &  date <= endDate))$debit  
+  } else {
+    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))$debit
+  }
+  
   sum(expenses, na.rm=TRUE)
 }
 
 # function that returns the mean daily expenditure between two dates
-meanDailyExpenditure <- function(df, startDate, endDate) {
+meanDailyExpenditure <- function(df, startDate, endDate, categoryFilter=NA) {
   daysDiff = as.numeric(difftime(endDate, startDate, units))
-  transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
-  sum(transactionBetweenDates$debit, na.rm = TRUE) / daysDiff
-  #mean((aggregate(transactionBetweenDates$debit,
-  #                by=transactionBetweenDates["date"],
-  #                FUN=function(x) {
-  #                    sum(x, na.rm = TRUE)
-  #      }))$x, na.rm = TRUE)
+  if (is.na(categoryFilter)) {
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
+  } else {
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & category == categoryFilter)  
+  }
+  sum(transactionBetweenDates$debit, na.rm = TRUE) / (daysDiff + 1)
 }
 
+# testing the function
 sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
+sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"), "food")
 meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"))
+meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-28"), "food")
+
+
+summarized_data = data.frame(month=c("June", "July", "August"),
+                     sumExpendituresPerMonth=c(
+                       sumExpenditures(merged_object, as.Date("2022-06-01"), as.Date("2022-06-30")),
+                       sumExpenditures(merged_object, as.Date("2022-07-01"), as.Date("2022-07-31")),
+                       sumExpenditures(merged_object, as.Date("2022-08-01"), as.Date("2022-08-31"))
+                     ),
+                     meanDailyExpenditurePerMonth=c(
+                       meanDailyExpenditure(merged_object, as.Date("2022-06-01"), as.Date("2022-06-30")),
+                       meanDailyExpenditure(merged_object, as.Date("2022-07-01"), as.Date("2022-07-31")),
+                       meanDailyExpenditure(merged_object, as.Date("2022-08-01"), as.Date("2022-08-31"))
+                     ),
+                     stringsAsFactors = FALSE
+                  )
+
+summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]
