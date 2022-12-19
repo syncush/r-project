@@ -58,7 +58,7 @@ july_csv["transaction_sum"][is.na(july_csv["transaction_sum"])] = 0
 august_csv["transaction_sum"][is.na(august_csv["transaction_sum"])] = 0
 
 # set values of CPI from CBS
-cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3) / 100
+cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
 
 # Combine all credit card csv to one unified dataframe
 credit_card_data = rbind(june_csv, july_csv, august_csv)
@@ -120,8 +120,8 @@ compareExpenditureToCPI <- function(df, category=NA) {
                                stringsAsFactors = FALSE
   )
   
-  comparison_table <-(summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / 
-                        summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) / 100
+  comparison_table <- ((summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / 
+                        summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) - 1) * 100
   
   data.frame(Months=c("July-June", "August-July"), CPI_INDEX=cpi_values_diff_between_months[2:3], sum_expenditure_index=comparison_table[,1], mean_daily_expenditure_index=comparison_table[,2])
 }
