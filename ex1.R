@@ -10,6 +10,8 @@ checquing_account_csv_path = "chequing_account.csv"
 
 output_path_normalized_csv = "normalized_data.csv"
 
+categoryCreditCardChequingFilterName = "credit card"
+
 # Import CSVs to R
 june_csv = read.csv(june_csv_path)
 july_csv = read.csv(july_csv_path)
@@ -64,7 +66,7 @@ cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
 credit_card_data = rbind(june_csv, july_csv, august_csv)
 
 # remove credit card transactions
-checquing_account_data = subset(checquing_account_csv, category!="credit card")
+checquing_account_data = subset(checquing_account_csv, category!=categoryCreditCardChequingFilterName)
 
 # prep to merge objects
 colnames(credit_card_data) = c("date", "debit", "transaction_type", "description", "category", "account")
@@ -121,7 +123,7 @@ compareExpenditureToCPI <- function(df, category=NA) {
   )
   
   comparison_table <- ((summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / 
-                        summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) - 1) * 100
+                          summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) - 1) * 100
   
   data.frame(Months=c("July-June", "August-July"), CPI_INDEX=cpi_values_diff_between_months[2:3], sum_expenditure_index=comparison_table[,1], mean_daily_expenditure_index=comparison_table[,2])
 }
