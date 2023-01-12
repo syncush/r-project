@@ -23,44 +23,40 @@ checquing_account_csv = read.csv(checquing_account_csv_path)
 english_col_names_credit = c( "date", "transaction_sum", "transaction_type", "business_name", "category")
 english_col_names_chequing_account = c("date", "debit", "credit", "description", "category")
 
-colnames(june_csv) = english_col_names_credit
-colnames(july_csv) = english_col_names_credit
-colnames(august_csv) = english_col_names_credit
-
-colnames(checquing_account_csv) = english_col_names_chequing_account
-
-# Add a column named “account” with all values being either “checquing” or “credit card”
-june_csv = cbind(june_csv, account="credit card")
-july_csv = cbind(july_csv, account="credit card")
-august_csv = cbind(august_csv, account="credit card")
-
-checquing_account_csv = cbind(checquing_account_csv, account="chequing")
-
-# Prep data section
-# convert date chars to date objects
-june_csv$date = as.Date(june_csv$date, credit_card_date_format)
-july_csv$date = as.Date(july_csv$date, credit_card_date_format)
-august_csv$date = as.Date(august_csv$date, credit_card_date_format)
-
-checquing_account_csv$date = as.Date(checquing_account_csv$date, checquing_account_date_format)
-
-# convert numeric characters to numeric values
-june_csv$transaction_sum = as.numeric(june_csv$transaction_sum)
-july_csv$transaction_sum = as.numeric(july_csv$transaction_sum)
-august_csv$transaction_sum = as.numeric(august_csv$transaction_sum)
-
-checquing_account_csv$debit = as.numeric(checquing_account_csv$debit)
-checquing_account_csv$credit = as.numeric(checquing_account_csv$credit)
-
-# prep making sure no na values in numeric columns
-checquing_account_csv["debit"][is.na(checquing_account_csv["debit"])] = 0
-checquing_account_csv["credit"][is.na(checquing_account_csv["credit"])] = 0
-june_csv["transaction_sum"][is.na(june_csv["transaction_sum"])] = 0
-july_csv["transaction_sum"][is.na(july_csv["transaction_sum"])] = 0
-august_csv["transaction_sum"][is.na(august_csv["transaction_sum"])] = 0
-
 # set values of CPI from CBS
 cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
+
+prepareCreditCardDataset <- function(dataset) {
+  # Change the Hebrew name of the columns to English
+  colnames(dataset) = english_col_names_credit
+  # Add a column named “account” with all values being either “checquing” or “credit card”
+  dataset = cbind(dataset, account="credit card")
+  # convert date chars to date objects
+  dataset$date = as.Date(dataset$date, credit_card_date_format)
+  # convert numeric characters to numeric values
+  dataset$transaction_sum = as.numeric(dataset$transaction_sum)
+  # prep making sure no na values in numeric columns
+  dataset["transaction_sum"][is.na(dataset["transaction_sum"])] = 0
+  dataset
+}
+
+prepareChequingDataset <- function(dataset) {
+  
+  colnames(dataset) = english_col_names_chequing_account
+  dataset = cbind(dataset, account="chequing")
+  dataset$date = as.Date(dataset$date, checquing_account_date_format)
+  dataset$debit = as.numeric(dataset$debit)
+  dataset$credit = as.numeric(dataset$credit)
+  # prep making sure no na values in numeric columns
+  dataset["debit"][is.na(dataset["debit"])] = 0
+  dataset["credit"][is.na(dataset["credit"])] = 0
+  dataset
+} 
+
+june_csv <- prepareCreditCardDataset(june_csv)
+july_csv <- prepareCreditCardDataset(july_csv)
+august_csv <- prepareCreditCardDataset(august_csv)
+checquing_account_csv <- prepareChequingDataset(checquing_account_csv)
 
 # Combine all credit card csv to one unified dataframe
 credit_card_data = rbind(june_csv, july_csv, august_csv)
