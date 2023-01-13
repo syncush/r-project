@@ -1,16 +1,35 @@
+# Install Pacakages
+install.packages("tidyverse")
+
+# Import packages
+library(tidyverse)
+
 # Variables for Pavel
-# Input
+
+# Credit card data
 credit_card_date_format = "%d/%m/%Y"
 june_csv_path = "Export_8_06_2022.csv"
 july_csv_path = "Export_8_07_2022.csv"
 august_csv_path = "Export_8_08_2022.csv"
+shouldImportSeptember = TRUE
+september_csv_path = "Export_9_2022.csv"
 
+# Chequing account data
 checquing_account_date_format = "%d.%m.%Y"
 checquing_account_csv_path = "chequing_account.csv"
+categoryCreditCardChequingFilterName = "credit card"
 
+#output csv
 output_path_normalized_csv = "normalized_data.csv"
 
-categoryCreditCardChequingFilterName = "credit card"
+# Analysis data range
+min_analysis_data = as.Date("")
+max_analysis_data = as.Date("")
+
+# Analysis
+analysis_categories = c()
+analysis_plots = c()
+
 
 # Import CSVs to R
 june_csv = read.csv(june_csv_path)
@@ -51,15 +70,23 @@ prepareChequingDataset <- function(dataset) {
   dataset["debit"][is.na(dataset["debit"])] = 0
   dataset["credit"][is.na(dataset["credit"])] = 0
   dataset
-} 
+}
 
 june_csv <- prepareCreditCardDataset(june_csv)
 july_csv <- prepareCreditCardDataset(july_csv)
 august_csv <- prepareCreditCardDataset(august_csv)
 checquing_account_csv <- prepareChequingDataset(checquing_account_csv)
 
+if (shouldImportSeptember == TRUE) {
+  september_csv = prepareCreditCardDataset(read.csv(september_csv_path))
+  cpi_values_diff_between_months = append(cpi_values_diff_between_months, 0.2)
+} else {
+  september_csv = data.frame(matrix(nrow = 0, ncol = length(colnames(august_csv))))
+  colnames(september_csv) = colnames(august_csv)
+}
+
 # Combine all credit card csv to one unified dataframe
-credit_card_data = rbind(june_csv, july_csv, august_csv)
+credit_card_data = rbind(june_csv, july_csv, august_csv, september_csv)
 
 # remove credit card transactions
 checquing_account_data = subset(checquing_account_csv, category!=categoryCreditCardChequingFilterName)
@@ -102,41 +129,13 @@ meanDailyExpenditure <- function(df, startDate, endDate, categoryFilter=NA) {
   sum(transactionBetweenDates$debit, na.rm = TRUE) / (daysDiff + 1)
 }
 
-# function to compare the change in sum and mean expenditures between the 3 months
-compareExpenditureToCPI <- function(df, category=NA) {
-  summarized_data = data.frame(month=c("June", "July", "August"),
-                               sumExpendituresPerMonth=c(
-                                 sumExpenditures(df, as.Date("2022-06-01"), as.Date("2022-06-30"), category),
-                                 sumExpenditures(df, as.Date("2022-07-01"), as.Date("2022-07-31"), category),
-                                 sumExpenditures(df, as.Date("2022-08-01"), as.Date("2022-08-31"), category)
-                               ),
-                               meanDailyExpenditurePerMonth=c(
-                                 meanDailyExpenditure(df, as.Date("2022-06-01"), as.Date("2022-06-30"), category),
-                                 meanDailyExpenditure(df, as.Date("2022-07-01"), as.Date("2022-07-31"), category),
-                                 meanDailyExpenditure(df, as.Date("2022-08-01"), as.Date("2022-08-31"), category)
-                               ),
-                               stringsAsFactors = FALSE
-  )
-  
-  comparison_table <- ((summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][2:3,] / 
-                          summarized_data[c("sumExpendituresPerMonth", "meanDailyExpenditurePerMonth")][1:2,]) - 1) * 100
-  
-  data.frame(Months=c("July-June", "August-July"), CPI_INDEX=cpi_values_diff_between_months[2:3], sum_expenditure_index=comparison_table[,1], mean_daily_expenditure_index=comparison_table[,2])
+# function that returns the sum of expenditures between two dates
+sumExpendituresPerDay = function(df, startDate, endDate, categoryFilter=NA) {
+  if (is.na(categoryFilter)) {
+    expenses = (subset(df, date>= startDate &  date <= endDate))$debit  
+  } else {
+    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))$debit
+  }
+  as.data.frame(expenses %>% group_by(date) %>% summarise(sum=sum(transaction_sum, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
 }
-
-compareExpenditureByCategory <- function(category) {
-  general_comparison_table <- compareExpenditureToCPI(combined_data)
-  category_comparison_table <- compareExpenditureToCPI(combined_data, category)
-  colnames(category_comparison_table) <- c("Months", "CPI_INDEX", paste(category, colnames(category_comparison_table)[3], sep="_"), paste(category, colnames(category_comparison_table)[4], sep="_"))
-  cbind(general_comparison_table, category_comparison_table[,3:4])
-}
-
-cat("************** Results for Task 2 **************")
-compareExpenditureToCPI(combined_data)
-
-cat("************** Results for Task 3 **************")
-# Input for task 3
-category_for_task3 = "food"
-compareExpenditureByCategory(category_for_task3)
-
 
