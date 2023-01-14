@@ -1,5 +1,5 @@
 # Install Pacakages
-install.packages("tidyverse")
+# install.packages("tidyverse")
 
 # Import packages
 library(tidyverse)
@@ -23,8 +23,8 @@ categoryCreditCardChequingFilterName = "credit card"
 output_path_normalized_csv = "normalized_data.csv"
 
 # Analysis data range
-min_analysis_data = as.Date("")
-max_analysis_data = as.Date("")
+min_analysis_data = as.Date("01/06/2022", credit_card_date_format)
+max_analysis_data = as.Date("31/08/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c()
@@ -132,10 +132,19 @@ meanDailyExpenditure <- function(df, startDate, endDate, categoryFilter=NA) {
 # function that returns the sum of expenditures between two dates
 sumExpendituresPerDay = function(df, startDate, endDate, categoryFilter=NA) {
   if (is.na(categoryFilter)) {
-    expenses = (subset(df, date>= startDate &  date <= endDate))$debit  
+    expenses = (subset(df, date>= startDate &  date <= endDate))  
   } else {
-    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))$debit
+    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))
   }
-  as.data.frame(expenses %>% group_by(date) %>% summarise(sum=sum(transaction_sum, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
+  as.data.frame(expenses %>% group_by(date) %>% summarise(sum=sum(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
 }
 
+# function that returns the mean daily expenditure between two dates
+meanExpenditurePerDay <- function(df, startDate, endDate, categoryFilter=NA) {
+  if (is.na(categoryFilter)) {
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
+  } else {
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & category == categoryFilter)  
+  }
+  as.data.frame(transactionBetweenDates %>% group_by(date) %>% summarise(sum=mean(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
+}
