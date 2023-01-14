@@ -23,8 +23,8 @@ categoryCreditCardChequingFilterName = "credit card"
 output_path_normalized_csv = "normalized_data.csv"
 
 # Analysis data range
-min_analysis_data = as.Date("01/06/2022", credit_card_date_format)
-max_analysis_data = as.Date("31/08/2022", credit_card_date_format)
+min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
+max_analysis_date = as.Date("31/08/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c()
