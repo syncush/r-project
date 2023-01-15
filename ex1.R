@@ -24,7 +24,7 @@ output_path_normalized_csv = "normalized_data.csv"
 
 # Analysis data range
 min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
-max_analysis_date = as.Date("31/08/2022", credit_card_date_format)
+max_analysis_date = as.Date("10/06/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c()
@@ -103,7 +103,7 @@ combined_data = rbind(checquing_account_data, credit_card_data)
 checquing_account_min_date = min(checquing_account_data$date)
 checquing_account_max_date = max(checquing_account_data$date)
 
-combined_data = subset(combined_data, date>=checquing_account_min_date & date<= checquing_account_max_date)
+combined_data = as_tibble(combined_data)
 
 write.csv(combined_data, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
 
@@ -136,15 +136,39 @@ sumExpendituresPerDay = function(df, startDate, endDate, categoryFilter=NA) {
   } else {
     expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))
   }
-  as.data.frame(expenses %>% group_by(date) %>% summarise(sum=sum(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
+  expenses %>% group_by(date) %>% summarise(sum=sum(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
 }
 
 # function that returns the mean daily expenditure between two dates
 meanExpenditurePerDay <- function(df, startDate, endDate, categoryFilter=NA) {
   if (is.na(categoryFilter)) {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & debit > 0)
   } else {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & category == categoryFilter)  
+    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & debit > 0 & category == categoryFilter)  
   }
-  as.data.frame(transactionBetweenDates %>% group_by(date) %>% summarise(sum=mean(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)))
+  transactionBetweenDates %>% group_by(date) %>% summarise(mean=mean(debit, na.rm = TRUE)) %>% complete(date=seq.Date(startDate, endDate, by="day"), fill = list(mean=0))
 }
+
+# didnt treat analysis dates, and category.
+drawExpenditureOverMonthPlot <- function(tbl, minDate, maxDate, category=NA) {
+  sumEPM <- tbl %>%
+    group_by(date=lubridate::ceiling_date(date, "month") - 1) %>%
+    summarize(sumExpenditure = sum(debit, na.rm = TRUE))
+  ggplot() +
+    geom_line(data=sumExpendituresPerDay(combined_data, minDate, maxDate), aes(date, sum,)) + 
+    geom_line(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
+    labs(y = "Sum of Expenditures", x = "dates")
+}
+
+drawExpenditureOverMonthPlot(as_tibble(combined_data), sdate, edate)
+
+# didnt treat analysis dates, and category.
+drawMeanExpenditurePerDayPlot <- function(tbl, minDate, maxDate, category=NA) {
+  ggplot() +
+    labs(y="Mean Daily Expenditure", x = "dates") +
+    geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean)) +
+    geom_boxplot(data=tbl, aes(date, debit, group=date))
+}
+
+meow <- subset(combined_data, date >= min_analysis_date & date <= max_analysis_date)
+drawMeanExpenditurePerDayPlot(meow, min_analysis_date, max_analysis_date)
