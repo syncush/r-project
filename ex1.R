@@ -27,7 +27,7 @@ min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
 max_analysis_date = as.Date("10/06/2022", credit_card_date_format)
 
 # Analysis
-analysis_categories = c()
+analysis_categories = c("all")
 analysis_plots = c()
 
 
@@ -72,6 +72,28 @@ prepareChequingDataset <- function(dataset) {
   dataset
 }
 
+prepareCombinedData <- function(chequingDataset, categoryCreditCardChequingFilterName, creditCardDataset, categories) {
+  # get time span of checquing account
+  checquing_account_min_date <- min(chequingDataset$date)
+  checquing_account_max_date <- max(chequingDataset$date)
+
+  # remove credit card transactions
+  chequingDataset = subset(chequingDataset, category!=categoryCreditCardChequingFilterName)
+  chequingDataset = cbind(chequingDataset, transaction_type=NA)
+  
+  # prep to merge objects
+  colnames(creditCardDataset) <- c("date", "debit", "transaction_type", "description", "category", "account")
+  creditCardDataset = cbind(creditCardDataset, credit=0)
+  
+  combined_data <- rbind(chequingDataset, creditCardDataset)
+  
+  combined_data <- as_tibble(combined_data)
+  
+  combined_data %>%
+    filter(category %in% categories | match("all", categories)) %>%
+    filter(date >= checquing_account_min_date & date <= checquing_account_max_date)
+}
+
 june_csv <- prepareCreditCardDataset(june_csv)
 july_csv <- prepareCreditCardDataset(july_csv)
 august_csv <- prepareCreditCardDataset(august_csv)
@@ -88,22 +110,11 @@ if (shouldImportSeptember == TRUE) {
 # Combine all credit card csv to one unified dataframe
 credit_card_data = rbind(june_csv, july_csv, august_csv, september_csv)
 
-# remove credit card transactions
-checquing_account_data = subset(checquing_account_csv, category!=categoryCreditCardChequingFilterName)
-
-# prep to merge objects
-colnames(credit_card_data) = c("date", "debit", "transaction_type", "description", "category", "account")
-credit_card_data = cbind(credit_card_data, credit=0)
-
-checquing_account_data = cbind(checquing_account_data, transaction_type=NA)
-
-combined_data = rbind(checquing_account_data, credit_card_data)
-
-# get time span of checquing account
-checquing_account_min_date = min(checquing_account_data$date)
-checquing_account_max_date = max(checquing_account_data$date)
-
-combined_data = as_tibble(combined_data)
+combined_data <- prepareCombinedData(checquing_account_csv,
+                                     categoryCreditCardChequingFilterName,
+                                     credit_card_data,
+                                     analysis_categories
+                                     )
 
 write.csv(combined_data, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
 
@@ -119,7 +130,7 @@ sumExpenditures = function(df, startDate, endDate, categoryFilter=NA) {
 }
 
 # function that returns the mean daily expenditure between two dates
-meanDailyExpenditure <- function(df, startDate, endDate, categoryFilter=NA) {
+meanDailyExpenditure <- function(df, startDate, endDate) {
   daysDiff = as.numeric(difftime(endDate, startDate, units))
   if (is.na(categoryFilter)) {
     transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
@@ -130,45 +141,53 @@ meanDailyExpenditure <- function(df, startDate, endDate, categoryFilter=NA) {
 }
 
 # function that returns the sum of expenditures between two dates
-sumExpendituresPerDay = function(df, startDate, endDate, categoryFilter=NA) {
-  if (is.na(categoryFilter)) {
-    expenses = (subset(df, date>= startDate &  date <= endDate))  
-  } else {
-    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))
-  }
-  expenses %>% group_by(date) %>% summarise(sum=sum(debit, na.rm = TRUE)) %>% complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
+sumExpendituresPerDay = function(df, startDate, endDate) {
+  df %>% 
+    filter(date >= startDate & date <= endDate) %>%
+    group_by(date) %>%
+    summarise(sum=sum(debit, na.rm = TRUE)) %>%
+    complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
 }
 
 # function that returns the mean daily expenditure between two dates
-meanExpenditurePerDay <- function(df, startDate, endDate, categoryFilter=NA) {
-  if (is.na(categoryFilter)) {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & debit > 0)
-  } else {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & debit > 0 & category == categoryFilter)  
-  }
-  transactionBetweenDates %>% group_by(date) %>% summarise(mean=mean(debit, na.rm = TRUE)) %>% complete(date=seq.Date(startDate, endDate, by="day"), fill = list(mean=0))
+meanExpenditurePerDay <- function(df, startDate, endDate) {
+  df %>%
+    filter(date >= startDate & date <= endDate & debit > 0) %>%
+    group_by(date) %>%
+    summarise(mean=mean(debit, na.rm = TRUE)) %>%
+    complete(date=seq.Date(startDate, endDate, by="day"), fill = list(mean=0))
 }
 
-# didnt treat analysis dates, and category.
-drawExpenditureOverMonthPlot <- function(tbl, minDate, maxDate, category=NA) {
+drawExpenditureOverMonthPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
   sumEPM <- tbl %>%
-    group_by(date=lubridate::ceiling_date(date, "month") - 1) %>%
+    group_by(date=lubridate::floor_date(date, "month") - 1) %>%
     summarize(sumExpenditure = sum(debit, na.rm = TRUE))
   ggplot() +
-    geom_line(data=sumExpendituresPerDay(combined_data, minDate, maxDate), aes(date, sum,)) + 
-    geom_line(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
+    geom_line(data=sumExpendituresPerDay(tbl, minDate, maxDate), aes(date, sum,)) + 
+    geom_step(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
     labs(y = "Sum of Expenditures", x = "dates")
 }
 
-drawExpenditureOverMonthPlot(as_tibble(combined_data), sdate, edate)
 
-# didnt treat analysis dates, and category.
-drawMeanExpenditurePerDayPlot <- function(tbl, minDate, maxDate, category=NA) {
+drawMeanExpenditurePerDayPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
+  boxplotData <- tbl %>%
+                  filter(date >= minDate & date <= maxDate)
   ggplot() +
     labs(y="Mean Daily Expenditure", x = "dates") +
-    geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean)) +
-    geom_boxplot(data=tbl, aes(date, debit, group=date))
+    geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean,)) +
+    geom_boxplot(data=boxplotData, aes(date, debit, group=date))
 }
 
-meow <- subset(combined_data, date >= min_analysis_date & date <= max_analysis_date)
-drawMeanExpenditurePerDayPlot(meow, min_analysis_date, max_analysis_date)
+drawAdditionalInsight <- function(dataet, minDate=min_analysis_date, maxDate=max_analysis_date) {
+  dataet %>%
+    filter(date >= minDate & date <= maxDate) %>%
+    group_by(month=months(date), category) %>%
+    summarise(sum=sum(debit)) %>%
+    ggplot(aes(x=month, y=category, fill=sum, alpha)) +
+    geom_tile() +
+    scale_fill_gradient(low="green", high="red")
+}
+
+drawExpenditureOverMonthPlot(combined_data)
+drawMeanExpenditurePerDayPlot(combined_data)
+drawAdditionalInsight(combined_data)
