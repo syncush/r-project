@@ -24,11 +24,19 @@ output_path_normalized_csv = "normalized_data.csv"
 
 # Analysis data range
 min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
-max_analysis_date = as.Date("10/06/2022", credit_card_date_format)
+max_analysis_date = as.Date("10/08/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c("all")
-analysis_plots = c()
+# Options: 
+#    ExpenditureOverMonthPlot (Task 1)
+#    MeanExpenditurePerDayPlot (Task 2)
+#    MeanExpenditureOverMonth (Task 3)
+#    SumExpenditureHeatmapPerCategory (Task 4)
+analysis_plots = c("ExpenditureOverMonthPlot",
+                   "MeanExpenditurePerDayPlot",
+                   "MeanExpenditureOverMonth",
+                   "SumExpenditureHeatmapPerCategory")
 
 
 # Import CSVs to R
@@ -129,17 +137,6 @@ sumExpenditures = function(df, startDate, endDate, categoryFilter=NA) {
   sum(expenses, na.rm=TRUE)
 }
 
-# function that returns the mean daily expenditure between two dates
-meanDailyExpenditure <- function(df, startDate, endDate) {
-  daysDiff = as.numeric(difftime(endDate, startDate, units))
-  if (is.na(categoryFilter)) {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate)
-  } else {
-    transactionBetweenDates <- subset(df, date >= startDate & date <= endDate & category == categoryFilter)  
-  }
-  sum(transactionBetweenDates$debit, na.rm = TRUE) / (daysDiff + 1)
-}
-
 # function that returns the sum of expenditures between two dates
 sumExpendituresPerDay = function(df, startDate, endDate) {
   df %>% 
@@ -160,25 +157,25 @@ meanExpenditurePerDay <- function(df, startDate, endDate) {
 
 drawExpenditureOverMonthPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
   sumEPM <- tbl %>%
-    group_by(date=lubridate::floor_date(date, "month") - 1) %>%
+    group_by(date=lubridate::floor_date(date, "month")) %>%
     summarize(sumExpenditure = sum(debit, na.rm = TRUE))
   ggplot() +
-    geom_line(data=sumExpendituresPerDay(tbl, minDate, maxDate), aes(date, sum,)) + 
+    geom_line(data=sumExpendituresPerDay(tbl, minDate, maxDate), aes(date, sum,), colour="blue") + 
     geom_step(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
-    labs(y = "Sum of Expenditures", x = "dates")
+    labs(y = "Sum of Expenditures", x = "Date")
 }
 
 
 drawMeanExpenditurePerDayPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
   boxplotData <- tbl %>%
-                  filter(date >= minDate & date <= maxDate)
+                  filter(date >= minDate & date <= maxDate & debit > 0)
   ggplot() +
     labs(y="Mean Daily Expenditure", x = "dates") +
     geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean,)) +
     geom_boxplot(data=boxplotData, aes(date, debit, group=date))
 }
 
-drawAdditionalInsight <- function(dataet, minDate=min_analysis_date, maxDate=max_analysis_date) {
+drawSumExpenditureHeatmapPerCategory <- function(dataet, minDate=min_analysis_date, maxDate=max_analysis_date) {
   dataet %>%
     filter(date >= minDate & date <= maxDate) %>%
     group_by(month=months(date), category) %>%
@@ -188,6 +185,57 @@ drawAdditionalInsight <- function(dataet, minDate=min_analysis_date, maxDate=max
     scale_fill_gradient(low="green", high="red")
 }
 
-drawExpenditureOverMonthPlot(combined_data)
-drawMeanExpenditurePerDayPlot(combined_data)
-drawAdditionalInsight(combined_data)
+drawMeanExpenditureOverMonth <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
+  meow <- tbl %>%
+    filter(date >= minDate & date <= maxDate & debit > 0) %>%
+    group_by(months(date)) %>%
+    summarize(minDate=min(date), maxDate=max(date), expenditureMean=mean(debit, na.rm = TRUE))
+  
+  t <- ggplot(data=meow) +
+    geom_step(aes(x=minDate, y=expenditureMean, color="red"))
+  meow2 <- tbl %>%
+    filter(date >= minDate & date <= maxDate & debit > 0) %>%
+    group_by(date=lubridate::ceiling_date(date, "month") - 1)
+  
+  t + geom_boxplot(data=meow2, aes(x=date, y=debit, group=date))
+}
+
+# for (toPlot in analysis_plots) {
+#   # Options: 
+#   #    ExpenditureOverMonthPlot (Task 1)
+#   #    MeanExpenditurePerDayPlot (Task 2)
+#   #    MeanExpenditureOverMonth (Task 3)
+#   #    SumExpenditureHeatmapPerCategory (Task 4)
+#   if (toPlot == "ExpenditureOverMonthPlot") {
+#     drawExpenditureOverMonthPlot(combined_data)
+#   }
+#   if (toPlot == "MeanExpenditurePerDayPlot") {
+#     drawMeanExpenditurePerDayPlot(combined_data)
+#   }
+#   if (toPlot == "ExpenditureOverMonthPlot") {
+#     drawMeanExpenditureOverMonth(combined_data)
+#   }
+#   if (toPlot == "ExpenditureOverMonthPlot") {
+#     drawSumExpenditureHeatmapPerCategory(combined_data)
+#   }
+# }
+
+# Options: 
+#    ExpenditureOverMonthPlot (Task 1)
+#    MeanExpenditurePerDayPlot (Task 2)
+#    MeanExpenditureOverMonth (Task 3)
+#    SumExpenditureHeatmapPerCategory (Task 4)
+if (match("ExpenditureOverMonthPlot", analysis_plots)) {
+  drawExpenditureOverMonthPlot(combined_data)
+}
+if (match("MeanExpenditurePerDayPlot", analysis_plots)) {
+  drawMeanExpenditurePerDayPlot(combined_data)
+}
+if (match("MeanExpenditureOverMonth", analysis_plots)) {
+  drawMeanExpenditureOverMonth(combined_data)
+}
+if (match("SumExpenditureHeatmapPerCategory", analysis_plots)) {
+  drawSumExpenditureHeatmapPerCategory(combined_data)
+}
+
+          
