@@ -162,7 +162,7 @@ drawExpenditureOverMonthPlot <- function(tbl, minDate=min_analysis_date, maxDate
   ggplot() +
     geom_line(data=sumExpendituresPerDay(tbl, minDate, maxDate), aes(date, sum,), colour="blue") + 
     geom_step(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
-    labs(y = "Sum of Expenditures", x = "Date")
+    labs(y = "Sum of Expenditures (Shekels)", x = "Time (days)")
 }
 
 
@@ -170,9 +170,9 @@ drawMeanExpenditurePerDayPlot <- function(tbl, minDate=min_analysis_date, maxDat
   boxplotData <- tbl %>%
                   filter(date >= minDate & date <= maxDate & debit > 0)
   ggplot() +
-    labs(y="Mean Daily Expenditure", x = "dates") +
     geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean,)) +
-    geom_boxplot(data=boxplotData, aes(date, debit, group=date))
+    geom_boxplot(data=boxplotData, aes(date, debit, group=date)) +
+    labs(title = "Expenditures Per Day", x = "Time (days)", y = "Mean Expenditure Per Day (Shekels)")
 }
 
 drawSumExpenditureHeatmapPerCategory <- function(dataet, minDate=min_analysis_date, maxDate=max_analysis_date) {
@@ -182,43 +182,25 @@ drawSumExpenditureHeatmapPerCategory <- function(dataet, minDate=min_analysis_da
     summarise(sum=sum(debit)) %>%
     ggplot(aes(x=month, y=category, fill=sum, alpha)) +
     geom_tile() +
-    scale_fill_gradient(low="green", high="red")
+    scale_fill_gradient(low="green", high="red") +
+    labs(title = "Expenditure Heatmap By Month and Category", x = "Months", y = "Category Name")
 }
 
 drawMeanExpenditureOverMonth <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
-  meow <- tbl %>%
+  stepData <- tbl %>%
     filter(date >= minDate & date <= maxDate & debit > 0) %>%
-    group_by(months(date)) %>%
-    summarize(minDate=min(date), maxDate=max(date), expenditureMean=mean(debit, na.rm = TRUE))
+    group_by(date=months(date)) %>%
+    summarize(expenditureMean=mean(debit, na.rm = TRUE))
+  t <- ggplot() +
+    geom_step(data=stepData, aes(x=date, y=expenditureMean, color="red"))
   
-  t <- ggplot(data=meow) +
-    geom_step(aes(x=minDate, y=expenditureMean, color="red"))
-  meow2 <- tbl %>%
+  boxplotData <- tbl %>%
     filter(date >= minDate & date <= maxDate & debit > 0) %>%
-    group_by(date=lubridate::ceiling_date(date, "month") - 1)
+    group_by(date=months(date))
   
-  t + geom_boxplot(data=meow2, aes(x=date, y=debit, group=date))
+  t + geom_boxplot(data=boxplotData, aes(x=date, y=debit, group=date)) +
+      labs(title="Monthly Median Expenditures", x="Months", y="Expenditures (Shekels)")
 }
-
-# for (toPlot in analysis_plots) {
-#   # Options: 
-#   #    ExpenditureOverMonthPlot (Task 1)
-#   #    MeanExpenditurePerDayPlot (Task 2)
-#   #    MeanExpenditureOverMonth (Task 3)
-#   #    SumExpenditureHeatmapPerCategory (Task 4)
-#   if (toPlot == "ExpenditureOverMonthPlot") {
-#     drawExpenditureOverMonthPlot(combined_data)
-#   }
-#   if (toPlot == "MeanExpenditurePerDayPlot") {
-#     drawMeanExpenditurePerDayPlot(combined_data)
-#   }
-#   if (toPlot == "ExpenditureOverMonthPlot") {
-#     drawMeanExpenditureOverMonth(combined_data)
-#   }
-#   if (toPlot == "ExpenditureOverMonthPlot") {
-#     drawSumExpenditureHeatmapPerCategory(combined_data)
-#   }
-# }
 
 # Options: 
 #    ExpenditureOverMonthPlot (Task 1)
