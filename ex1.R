@@ -1,8 +1,10 @@
 # Install Pacakages
 # install.packages("tidyverse")
+#install.packages("ggpubr")
 
 # Import packages
 library(tidyverse)
+library(ggpubr)
 
 # Variables for Pavel
 
@@ -191,15 +193,19 @@ drawMeanExpenditureOverMonth <- function(tbl, minDate=min_analysis_date, maxDate
     filter(date >= minDate & date <= maxDate & debit > 0) %>%
     group_by(date=months(date)) %>%
     summarize(expenditureMean=mean(debit, na.rm = TRUE))
-  t <- ggplot() +
-    geom_step(data=stepData, aes(x=date, y=expenditureMean, color="red"))
+  stepPlot <- ggplot() +
+    geom_path(data=stepData, aes(x=factor(date, levels = month.name), group=1, y=expenditureMean, color="red")) +
+
+    labs(title="Daily Median Expenditures (Over a month)", x="Months", y="Expenditures (Shekels)")
   
   boxplotData <- tbl %>%
     filter(date >= minDate & date <= maxDate & debit > 0) %>%
     group_by(date=months(date))
   
-  t + geom_boxplot(data=boxplotData, aes(x=date, y=debit, group=date)) +
-      labs(title="Monthly Median Expenditures", x="Months", y="Expenditures (Shekels)")
+  boxplotPlot <- ggplot() + 
+                 geom_boxplot(data=boxplotData, aes(x=factor(date, levels = month.name), y=debit, group=date)) +
+                 labs(title="Monthly Median Expenditures", x="Months", y="Expenditures (Shekels)")
+  ggarrange(stepPlot, boxplotPlot, ncol=2, nrow=1)
 }
 
 # Options: 
