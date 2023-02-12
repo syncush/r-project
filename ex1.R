@@ -1,5 +1,5 @@
 # Install Pacakages
-# install.packages("tidyverse")
+#install.packages("tidyverse")
 #install.packages("ggpubr")
 
 # Import packages
@@ -128,102 +128,24 @@ combined_data <- prepareCombinedData(checquing_account_csv,
 
 write.csv(combined_data, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
 
-# function that returns the sum of expenditures between two dates
-sumExpenditures = function(df, startDate, endDate, categoryFilter=NA) {
-  if (is.na(categoryFilter)) {
-    expenses = (subset(df, date>= startDate &  date <= endDate))$debit  
-  } else {
-    expenses = (subset(df, date>= startDate &  date <= endDate & category == categoryFilter))$debit
+stdDevPerMonthForDailySumOfExpend <- function(tbl, min_date_range, max_date_range) {
+  sumPerDay <- tbl %>%
+                group_by(date) %>%
+                summarise(sum=sum(debit, na.rm = TRUE)) %>% 
+                complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
+  stdDevPerMonth <- sumPerDay %>%
+                      group_by(month=months(date)) %>%
+                      summarise_at(vars(sum), list(name=sd))
+  stdDevPerMonth
+}
+
+cumulativeMontlyInflation <- function(cpiVec) {
+  ccpiVec <- c(cpiVec[1])
+  loopIndex = 2
+  for(cpi_i in cpiVec[2:length(cpiVec)]) {
+    ccpiVec <- append(ccpiVec, (((1 + cpiVec[loopIndex - 1])*(1 +  cpi_i))-1))
+    loopIndex = loopIndex + 1
   }
-  
-  sum(expenses, na.rm=TRUE)
+  ccpiVec
 }
-
-# function that returns the sum of expenditures between two dates
-sumExpendituresPerDay = function(df, startDate, endDate) {
-  df %>% 
-    filter(date >= startDate & date <= endDate) %>%
-    group_by(date) %>%
-    summarise(sum=sum(debit, na.rm = TRUE)) %>%
-    complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
-}
-
-# function that returns the mean daily expenditure between two dates
-meanExpenditurePerDay <- function(df, startDate, endDate) {
-  df %>%
-    filter(date >= startDate & date <= endDate & debit > 0) %>%
-    group_by(date) %>%
-    summarise(mean=mean(debit, na.rm = TRUE)) %>%
-    complete(date=seq.Date(startDate, endDate, by="day"), fill = list(mean=0))
-}
-
-drawExpenditureOverMonthPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
-  sumEPM <- tbl %>%
-    group_by(date=lubridate::floor_date(date, "month")) %>%
-    summarize(sumExpenditure = sum(debit, na.rm = TRUE))
-  ggplot() +
-    geom_line(data=sumExpendituresPerDay(tbl, minDate, maxDate), aes(date, sum,), colour="blue") + 
-    geom_step(data=sumEPM, aes(date, sumExpenditure), colour="red", size=1.2) +
-    labs(y = "Sum of Expenditures (Shekels)", x = "Time (days)")
-}
-
-
-drawMeanExpenditurePerDayPlot <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
-  boxplotData <- tbl %>%
-                  filter(date >= minDate & date <= maxDate & debit > 0)
-  ggplot() +
-    geom_line(data=meanExpenditurePerDay(tbl, minDate, maxDate), aes(date, mean,)) +
-    geom_boxplot(data=boxplotData, aes(date, debit, group=date)) +
-    labs(title = "Expenditures Per Day", x = "Time (days)", y = "Mean Expenditure Per Day (Shekels)")
-}
-
-drawSumExpenditureHeatmapPerCategory <- function(dataet, minDate=min_analysis_date, maxDate=max_analysis_date) {
-  dataet %>%
-    filter(date >= minDate & date <= maxDate) %>%
-    group_by(month=months(date), category) %>%
-    summarise(sum=sum(debit)) %>%
-    ggplot(aes(x=month, y=category, fill=sum, alpha)) +
-    geom_tile() +
-    scale_fill_gradient(low="green", high="red") +
-    labs(title = "Expenditure Heatmap By Month and Category", x = "Months", y = "Category Name")
-}
-
-drawMeanExpenditureOverMonth <- function(tbl, minDate=min_analysis_date, maxDate=max_analysis_date) {
-  stepData <- tbl %>%
-    filter(date >= minDate & date <= maxDate & debit > 0) %>%
-    group_by(date=months(date)) %>%
-    summarize(expenditureMean=mean(debit, na.rm = TRUE))
-  stepPlot <- ggplot() +
-    geom_path(data=stepData, aes(x=factor(date, levels = month.name), group=1, y=expenditureMean, color="red")) +
-
-    labs(title="Daily Median Expenditures (Over a month)", x="Months", y="Expenditures (Shekels)")
-  
-  boxplotData <- tbl %>%
-    filter(date >= minDate & date <= maxDate & debit > 0) %>%
-    group_by(date=months(date))
-  
-  boxplotPlot <- ggplot() + 
-                 geom_boxplot(data=boxplotData, aes(x=factor(date, levels = month.name), y=debit, group=date)) +
-                 labs(title="Monthly Median Expenditures", x="Months", y="Expenditures (Shekels)")
-  ggarrange(stepPlot, boxplotPlot, ncol=2, nrow=1)
-}
-
-# Options: 
-#    ExpenditureOverMonthPlot (Task 1)
-#    MeanExpenditurePerDayPlot (Task 2)
-#    MeanExpenditureOverMonth (Task 3)
-#    SumExpenditureHeatmapPerCategory (Task 4)
-if (match("ExpenditureOverMonthPlot", analysis_plots)) {
-  drawExpenditureOverMonthPlot(combined_data)
-}
-if (match("MeanExpenditurePerDayPlot", analysis_plots)) {
-  drawMeanExpenditurePerDayPlot(combined_data)
-}
-if (match("MeanExpenditureOverMonth", analysis_plots)) {
-  drawMeanExpenditureOverMonth(combined_data)
-}
-if (match("SumExpenditureHeatmapPerCategory", analysis_plots)) {
-  drawSumExpenditureHeatmapPerCategory(combined_data)
-}
-
           
