@@ -30,15 +30,6 @@ max_analysis_date = as.Date("10/08/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c("all")
-# Options: 
-#    ExpenditureOverMonthPlot (Task 1)
-#    MeanExpenditurePerDayPlot (Task 2)
-#    MeanExpenditureOverMonth (Task 3)
-#    SumExpenditureHeatmapPerCategory (Task 4)
-analysis_plots = c("ExpenditureOverMonthPlot",
-                   "MeanExpenditurePerDayPlot",
-                   "MeanExpenditureOverMonth",
-                   "SumExpenditureHeatmapPerCategory")
 
 
 # Import CSVs to R
@@ -53,7 +44,24 @@ english_col_names_credit = c( "date", "transaction_sum", "transaction_type", "bu
 english_col_names_chequing_account = c("date", "debit", "credit", "description", "category")
 
 # set values of CPI from CBS
-cpi_values_diff_between_months = c(0.4 , 1.1 , -0.3)
+create_month_tibble <- function() {
+  month_start <- seq(
+    from = as.Date("2022-01-01", format="%Y-%m-%d"),
+    to = as.Date("2022-12-01", format="%Y-%m-%d"),
+    by = "months"
+  )
+  month_end <- month_start %>% lubridate::ceiling_date(unit="month") - 1
+  tibble(month_name = month.name,
+         start = month_start,
+         end = month_end,
+         days_in_month=month_start %>% lubridate::days_in_month())
+}
+cpi_values_diff_between_months = as_tibble(read.csv("cpi_csv.csv")) %>%
+                                  complete(month_name=month.name, fill=list(cpi=0))
+
+general_month_info <- inner_join(cpi_values_diff_between_months %>% complete(month_name=month.name, fill=list(cpi=0)),
+                                 create_month_tibble(),
+                                 by=c("month_name"))
 
 prepareCreditCardDataset <- function(dataset) {
   # Change the Hebrew name of the columns to English
@@ -111,7 +119,6 @@ checquing_account_csv <- prepareChequingDataset(checquing_account_csv)
 
 if (shouldImportSeptember == TRUE) {
   september_csv = prepareCreditCardDataset(read.csv(september_csv_path))
-  cpi_values_diff_between_months = append(cpi_values_diff_between_months, 0.2)
 } else {
   september_csv = data.frame(matrix(nrow = 0, ncol = length(colnames(august_csv))))
   colnames(september_csv) = colnames(august_csv)
@@ -128,24 +135,84 @@ combined_data <- prepareCombinedData(checquing_account_csv,
 
 write.csv(combined_data, file=output_path_normalized_csv, fileEncoding = "UTF-8", row.names = FALSE)
 
+##
+## No handling of date range
+##
 stdDevPerMonthForDailySumOfExpend <- function(tbl, min_date_range, max_date_range) {
   sumPerDay <- tbl %>%
                 group_by(date) %>%
                 summarise(sum=sum(debit, na.rm = TRUE)) %>% 
                 complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0))
   stdDevPerMonth <- sumPerDay %>%
-                      group_by(month=months(date)) %>%
-                      summarise_at(vars(sum), list(name=sd))
+                      group_by(month_name=months(date)) %>%
+                      summarise_at(vars(sum), list(expense_std_dev=sd))
   stdDevPerMonth
 }
 
-cumulativeMontlyInflation <- function(cpiVec) {
-  ccpiVec <- c(cpiVec[1])
+cumulativeMontlyInflation <- function(monthCPI) {
+  ccpiVec <- c(general_month_info %>% filter(month_name == "June") %>% select(cpi) %>% pull() %>% nth(1))
   loopIndex = 2
-  for(cpi_i in cpiVec[2:length(cpiVec)]) {
-    ccpiVec <- append(ccpiVec, (((1 + cpiVec[loopIndex - 1])*(1 +  cpi_i))-1))
-    loopIndex = loopIndex + 1
+  prevMonth = "June"
+  for(monthName in c("July", "August", "September", "October")) {
+    cpi_i <- monthCPI %>% filter(month_name == monthName) %>% select(cpi) %>% pull() %>% nth(1)
+    prevMonthCPI <- monthCPI %>% filter(month_name == prevMonth) %>% select(cpi) %>% pull() %>% nth(1)
+    ccpiVec <- append(ccpiVec, (((1 + prevMonthCPI)*(1 +  cpi_i))-1))
+    loopIndex <- loopIndex + 1
+    prevMonth <- monthName
   }
-  ccpiVec
+  tibble(month_name=c("June","July", "August", "September", "October"), ccpi=ccpiVec)
 }
-          
+
+impliedDailyInflation <- function(monthCPI) {
+  dcpiVec = c()
+  index <- 6
+  for(monthName in month.name[6:10]) {
+    dm_i = monthCPI %>% filter(month_name == monthName) %>% select(days_in_month) %>% pull() %>% nth(1)
+    month_cpi_val <- monthCPI %>% filter(month_name == monthName) %>% select(cpi) %>% pull() %>% nth(1)
+    dcpiVec <- append(dcpiVec, (((1 + month_cpi_val)^(1 / dm_i)) - 1))
+    index <- index + 1
+  }
+  tibble(month_name=month.name[6:10], dcpi=dcpiVec)
+}
+
+cumulativeImpliedDailyInflation <- function(monthCPI, monthsNameVec) {
+  first_day_of_seq <- monthCPI %>%
+                        filter(month_name == monthsNameVec[1]) %>%
+                        select(start) %>%
+                        pull() %>%
+                        nth(1)
+  last_day_of_seq <- monthCPI %>%
+                      filter(month_name == last(monthsNameVec)) %>%
+                      select(end) %>%
+                      pull() %>%
+                      nth(1)
+  daysVec <- seq(
+    from = first_day_of_seq,
+    to = last_day_of_seq,
+    by = "days"
+  )
+  dcpi_month_tbl <- impliedDailyInflation(monthCPI)
+  cdcpi_dm <- c()
+  cdcpi_ldom <- 0
+  dayIndex <- 1
+  prevMonthName <- monthsNameVec[1]
+  for(index in 1:length(daysVec)) {
+    currentMonth <- months(daysVec[index])
+    if (currentMonth != prevMonthName) {
+      dayIndex <- 1
+      cdcpi_ldom <- last(cdcpi_dm)
+    }
+    
+    currMonthDCPI <- dcpi_month_tbl %>%
+                      filter(month_name == currentMonth) %>%
+                      select(dcpi) %>%
+                      pull() %>%
+                      nth(1)
+    
+    cdcpi_dm <- append(cdcpi_dm, ((1 + cdcpi_ldom)*((1 + currMonthDCPI)^dayIndex)-1))
+    
+    prevMonthName <- currentMonth
+    dayIndex <- dayIndex + 1
+  }
+  tibble(date=daysVec, cdcpi_dm=cdcpi_dm)
+}
