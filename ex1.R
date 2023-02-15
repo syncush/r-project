@@ -319,13 +319,59 @@ createXMonitorChart <- function(xChartCombinedData, title) {
     labs(title=title, x="Time", y="Daily Sum Expenditure")
 }
 ####### Monitoring Charts
+##### XBAR
 xChartCombinedData <- sumExpendituresPerDay(combined_data, min_analysis_date, max_analysis_date)
 # not the correct value
 firstMonth = "June"
 # Dont know if baseCL is what he meant
-baseCL <- 
+baseCL <- xChartCombinedData %>% filter(months(date) == firstMonth) %>% summarise(stdDev=mean(sum)) %>% pull() %>% nth(1)
 baseSD <- xChartCombinedData %>% filter(months(date) == firstMonth) %>% summarise(stdDev=sd(sum)) %>% pull() %>% nth(1)
 ucl <- baseCL + 3 * baseSD
 lcl <- max(0, baseCL - 3 * baseSD)
 xChartCombinedData <- xChartCombinedData %>% mutate(cl=baseCL, lcl=lcl, ucl=ucl)
 createXMonitorChart(xChartCombinedData, "X-Chart Daily Sum Expenditure")
+
+
+
+
+##### CuSUM Chart
+delta <- 1
+# not the correct value
+firstMonth = "June"
+sqrt_vx <- sumExpendituresPerDay(combined_data, min_analysis_date, max_analysis_date) %>%
+            filter(months(date) == firstMonth) %>%
+            summarise(stdDev=sd(sum)) %>% pull() %>%
+            nth(1)
+k <- sqrt_vx / 2
+h <- 11.61828*k
+mu_0 <- baseCL
+cusumTibble <- tibble(combined_data) %>%
+                filter(debit > 0) %>%
+                group_by(date) %>%
+                summarise(meanExpenditure=mean(debit)) %>%
+                mutate(c_plus_zero=NA, c_minus_zero=NA)
+index <- 0
+currentDate <- min(cusumTibble$date)
+maxDate <- max(cusumTibble$date)
+while(currentDate <= maxDate) {
+  if (index == 0) {
+    c_plus_zero_i = 0
+    c_minus_zero_i = 0
+    index <- index + 1
+    cusumTibble <- cusumTibble %>% mutate(c_plus_zero=replace(c_plus_zero, date == currentDate, c_plus_zero_i),
+                                          c_minus_zero=replace(c_minus_zero, date == currentDate, c_minus_zero_i))
+  } else {
+    prevDay <- currentDate - lubridate::days(1)
+    prev_c_plus_zero_i = cusumTibble %>% filter(date == prevDay) %>% select(c_plus_zero) %>% nth(1)
+    prev_c_minus_zero_i = cusumTibble %>% filter(date == prevDay) %>% select(c_minus_zero) %>% nth(1)
+    
+    c_plus_zero_i = max(0, prev_c_plus_zero_i + index - mu_0 - k)
+    c_minus_zero_i = max(0, prev_c_minus_zero_i + mu_0 - k - index)
+    cusumTibble <- cusumTibble %>% mutate(c_plus_zero=replace(c_plus_zero, date == currentDate, c_plus_zero_i),
+                                          c_minus_zero=replace(c_minus_zero, date == currentDate, c_minus_zero_i))
+    index <- index + 1
+    currentDate <- currentDate + lubridate::days(1)
+  }
+}
+
+  
