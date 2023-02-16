@@ -26,7 +26,7 @@ output_path_normalized_csv = "normalized_data.csv"
 
 # Analysis data range
 min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
-max_analysis_date = as.Date("10/08/2022", credit_card_date_format)
+max_analysis_date = as.Date("31/10/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c("all")
@@ -222,8 +222,8 @@ sumExpendituresPerDay = function(df, startDate, endDate) {
   df %>%  
     filter(date >= startDate & date <= endDate) %>% 
     group_by(date) %>% 
-    summarise(sum=sum(debit, na.rm = TRUE)) %>% 
-    complete(date=seq.Date(min(date), max(date), by="day"), fill = list(sum=0)) 
+    summarise(sum=sum(debit, na.rm = TRUE)) %>%
+    complete(date=seq.Date(startDate, endDate, by="day"), fill = list(sum=0)) 
 } 
 
 # function that returns the mean daily expenditure between two dates 
@@ -323,7 +323,6 @@ createXMonitorChart <- function(xChartCombinedData, title) {
 xChartCombinedData <- sumExpendituresPerDay(combined_data, min_analysis_date, max_analysis_date)
 # not the correct value
 firstMonth = "June"
-# Dont know if baseCL is what he meant
 baseCL <- xChartCombinedData %>% filter(months(date) == firstMonth) %>% summarise(stdDev=mean(sum)) %>% pull() %>% nth(1)
 baseSD <- xChartCombinedData %>% filter(months(date) == firstMonth) %>% summarise(stdDev=sd(sum)) %>% pull() %>% nth(1)
 ucl <- baseCL + 3 * baseSD
@@ -331,14 +330,22 @@ lcl <- max(0, baseCL - 3 * baseSD)
 xChartCombinedData <- xChartCombinedData %>% mutate(cl=baseCL, lcl=lcl, ucl=ucl)
 createXMonitorChart(xChartCombinedData, "X-Chart Daily Sum Expenditure")
 
+ccpiTibble <- cumulativeMontlyInflation(general_month_info)
+updatedCCPIControlxChartCombinedData <- left_join(tibble(xChartCombinedData) %>% mutate(month_name=months(date)), ccpiTibble, by=c("month_name")) %>%
+                                          mutate(cl=ccpi * cl, lcl=ccpi * lcl, ucl=ucl * ccpi)
+createXMonitorChart(updatedCCPIControlxChartCombinedData, "X-Chart Daily Sum Expenditure (Adjusted With CCPI)")
 
+cdcpiTibble <- cumulativeImpliedDailyInflation(general_month_info, month.name[6:10])
+updatedCDCCPIControlxChartCombinedData <- left_join(tibble(xChartCombinedData), cdcpiTibble, by=c("date")) %>%
+                                        mutate(cl=cdcpi_dm * cl, lcl=cdcpi_dm * lcl, ucl=ucl * cdcpi_dm)
+createXMonitorChart(updatedCDCCPIControlxChartCombinedData, "X-Chart Daily Sum Expenditure (Adjusted With CDCPI)")
 
 
 ##### CuSUM Chart
 delta <- 1
 # not the correct value
 firstMonth = "June"
-sqrt_vx <- sumExpendituresPerDay(combined_data, min_analysis_date, max_analysis_date) %>%
+sqrt_vx <- sumExpendituresPerDay(combined_data %>% filter(category == "shopping"), min_analysis_date, max_analysis_date) %>%
             filter(months(date) == firstMonth) %>%
             summarise(stdDev=sd(sum)) %>% pull() %>%
             nth(1)
@@ -374,4 +381,15 @@ while(currentDate <= maxDate) {
   }
 }
 
+cusumCharHelperTibble <- tibble(date=cusumTibble$date, k=k, minus_k=-k, h=h, minus_h=-h)
+
+ggplot(cusumTibble) +
+  geom_line(aes(x=date, y=c_plus_zero), color="black") +
+  geom_point(aes(x=date, y=c_plus_zero), color="black") +
+  geom_line(aes(x=date, y=c_minus_zero), color="green") +
+  geom_point(aes(x=date, y=c_minus_zero), color="green") +
+  geom_line(data=cusumCharHelperTibble, aes(x=date, y=k), color="red") +
+  geom_line(data=cusumCharHelperTibble, aes(x=date, y=minus_k), color="red") +
+  geom_line(data=cusumCharHelperTibble, aes(x=date, y=h), color="red",  linetype="dashed") +
+  geom_line(data=cusumCharHelperTibble, aes(x=date, y=minus_h), color="red", linetype="dashed")
   
