@@ -17,8 +17,8 @@ checquing_account_date_format = "%d/%m/%Y"
 categoryCreditCardChequingFilterName = "credit card"
 
 # Analysis data range
-min_analysis_date = as.Date("01/08/2022", credit_card_date_format)
-max_analysis_date = as.Date("25/08/2022", credit_card_date_format)
+min_analysis_date = as.Date("01/06/2022", credit_card_date_format)
+max_analysis_date = as.Date("15/06/2022", credit_card_date_format)
 
 # Analysis
 analysis_categories = c("all")
@@ -224,14 +224,16 @@ general_month_info <- inner_join(cpi_values_diff_between_months %>% complete(mon
 
 cumulativeMontlyInflation <- function(monthCPI) {
   ccpiVec <- c(general_month_info %>% filter(month_name == combined_data_months[1]) %>% select(cpi) %>% pull() %>% nth(1))
-  loopIndex = 2
-  prevMonth = combined_data_months[1]
-  for(monthName in combined_data_months[2:length(combined_data_months)]) {
-    cpi_i <- monthCPI %>% filter(month_name == monthName) %>% select(cpi) %>% pull() %>% nth(1)
-    prevMonthCPI <- monthCPI %>% filter(month_name == prevMonth) %>% select(cpi) %>% pull() %>% nth(1)
-    ccpiVec <- append(ccpiVec, (((1 + prevMonthCPI)*(1 +  cpi_i))-1))
-    loopIndex <- loopIndex + 1
-    prevMonth <- monthName
+  if (length(combined_data_months) > 1) {
+    loopIndex = 2
+    prevMonth = combined_data_months[1]
+    for(monthName in combined_data_months[2:length(combined_data_months)]) {
+      cpi_i <- monthCPI %>% filter(month_name == monthName) %>% select(cpi) %>% pull() %>% nth(1)
+      prevMonthCPI <- monthCPI %>% filter(month_name == prevMonth) %>% select(cpi) %>% pull() %>% nth(1)
+      ccpiVec <- append(ccpiVec, (((1 + prevMonthCPI)*(1 +  cpi_i))-1))
+      loopIndex <- loopIndex + 1
+      prevMonth <- monthName
+    }
   }
   tibble(month_name=combined_data_months, ccpi=ccpiVec)
 }
@@ -294,7 +296,8 @@ cumulativeImpliedDailyInflationTibble <- cumulativeImpliedDailyInflation(general
 
 # function that returns the sum of expenditures between two dates 
 sumExpendituresPerDay = function(df, startDate, endDate) { 
-  df %>%  
+  df %>%
+    filter(debit > 0) %>%
     filter(date >= startDate & date <= endDate) %>% 
     group_by(date) %>% 
     summarise(sum=sum(debit, na.rm = TRUE)) %>%
@@ -441,17 +444,11 @@ generateCucusmTibble <- function(dataTibble, inflationTibble, mode="nominal") {
   delta <- 1
   # not the correct value
   firstMonth = combined_data_months[1]
-  sqrt_vx <- sumExpendituresPerDay(dataTibble, min_analysis_date, max_analysis_date) %>%
-    filter(months(date) == firstMonth) %>%
-    summarise(stdDev=sd(sum)) %>%
-    pull() %>%
-    nth(1)
+  sumExpendituresPerDayTibble <- sumExpendituresPerDay(dataTibble, min_analysis_date, max_analysis_date)
+  sqrt_vx <- getBaseSD(sumExpendituresPerDayTibble, combined_data_months[1])
   k <- sqrt_vx / 2
   h <- 11.61828 * k
-  cusumTibble <- tibble(dataTibble) %>%
-    filter(debit > 0) %>%
-    group_by(date) %>%
-    summarise(meanExpenditure=mean(debit)) %>%
+  cusumTibble <- sumExpendituresPerDayTibble %>%
     mutate(c_plus_zero=NA, c_minus_zero=NA)
   currentDate <- min(cusumTibble$date)
   maxDate <- max(cusumTibble$date)
@@ -474,8 +471,10 @@ generateCucusmTibble <- function(dataTibble, inflationTibble, mode="nominal") {
       prev_c_plus_zero_i = cusumTibble %>% filter(date == prevDay) %>% select(c_plus_zero) %>% nth(1)
       prev_c_minus_zero_i = cusumTibble %>% filter(date == prevDay) %>% select(c_minus_zero) %>% nth(1)
       
-      c_plus_zero_i = max(0, prev_c_plus_zero_i + index - mu_0 - k)
-      c_minus_zero_i = max(0, prev_c_minus_zero_i + mu_0 - k - index)
+      xi <- cusumTibble %>% filter(date == currentDate) %>% select(sum) %>% pull() %>% nth(1)
+      
+      c_plus_zero_i = max(0, prev_c_plus_zero_i + xi - mu_0 - k)
+      c_minus_zero_i = max(0, prev_c_minus_zero_i + mu_0 - k - xi)
       cusumTibble <- cusumTibble %>% mutate(c_plus_zero=replace(c_plus_zero, date == currentDate, c_plus_zero_i),
                                             c_minus_zero=replace(c_minus_zero, date == currentDate, c_minus_zero_i))
       index <- index + 1
